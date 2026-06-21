@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>pon - CHRONOS AI VTuber</title>
+    <style>
+        * { margin: 0; padding: 0; }
+        html, body {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
+            overflow: hidden;
+            font-family: Arial;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        #info {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.85);
+            color: #fff;
+            padding: 15px 20px;
+            border-radius: 8px;
+            font-size: 13px;
+            z-index: 10;
+            max-width: 300px;
+        }
+        #emotion {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.85);
+            color: #aaa;
+            padding: 10px 15px;
+            border-radius: 4px;
+            font-family: 'Courier New';
+            font-size: 11px;
+            max-width: 250px;
+        }
+        #fps {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.7);
+            color: #0f0;
+            padding: 10px 15px;
+            border-radius: 4px;
+            font-family: 'Courier New';
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div id="info">pon - CHRONOS AI VTuber<br/>Loading...</div>
+    <div id="emotion">emotion: connecting...</div>
+    <div id="fps">FPS: 0</div>
+
+    <script>
+        'use strict';
+
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const info = document.getElementById('info');
+        const emotionDisplay = document.getElementById('emotion');
+        const fpsDisplay = document.getElementById('fps');
+
+        let ponImage = null;
+        let isLoaded = false;
+        let frameCount = 0;
+        let lastTime = Date.now();
+        let ws = null;
+
+        // 感情状態
+        let emotion = {
+            label: "読み込み中",
+            energy: 0.5,
+            mood: 0.0,
+            tension: 0.5,
+            sulky: 0.0,
+            confidence: 0.7
+        };
+
+        // アニメーション状態
+        const anim = {
+            breathScale: 1.0,
+            headTilt: 0,
+            opacity: 1.0
+        };
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        async function loadImage() {
+            try {
+                info.textContent = 'pon - Loading image...';
+
+                await new Promise((resolve, reject) => {
+                    const img = new Image();
+                    img.crossOrigin = 'anonymous';
+                    img.onload = () => {
+                        ponImage = img;
+                        info.textContent = 'pon - Ready ✓';
+                        isLoaded = true;
+                        resolve();
+                    };
+                    img.onerror = () => reject(new Error('Failed to load image'));
+                    img.src = 'data/pon_illustration.png?t=' + Date.now();
+                });
+
+                connectWebSocket();
+                animate();
+
+            } catch (e) {
+                console.error('Load error:', e);
+                info.textContent = `Error: ${e.message}`;
+            }
+        }
+
+        function connectWebSocket() {
+            try {
+                ws = new WebSocket('ws://localhost:8001');
+                ws.onopen = () => {
+                    emotionDisplay.textContent = 'Connected to Chronos';
+                };
+                ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'emotion') {
+                        emotion = data.emotion;
+                    }
+                };
+                ws.onerror = (e) => {
+                    emotionDisplay.textContent = 'WebSocket error (Chronos offline)';
+                };
+                ws.onclose = () => {
+                    setTimeout(connectWebSocket, 3000);
+                };
+            } catch (e) {
+                emotionDisplay.textContent = 'Connection failed';
+            }
+        }
+
+        function updateAnimation() {
+            const now = Date.now();
+
+            // 呼吸（energy に基づく）
+            const breathCycle = (now % 3000) / 3000;
+            anim.breathScale = 1.0 + Math.sin(breathCycle * Math.PI * 2) * 0.03 * emotion.energy;
+
+            // 頭の傾き（tension に基づく）
+            anim.headTilt = Math.sin(now / 4000 * Math.PI * 2) * 0.05 * emotion.tension;
+
+            // 透明度（confidence に基づく）
+            anim.opacity = 0.8 + emotion.confidence * 0.2;
+
+            emotionDisplay.textContent = `${emotion.label}\nenergy: ${emotion.energy.toFixed(2)}\nmood: ${emotion.mood.toFixed(2)}\ntension: ${emotion.tension.toFixed(2)}`;
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (!isLoaded || !ponImage) return;
+
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+
+            const scale = Math.min(
+                canvas.width / ponImage.width,
+                canvas.height / ponImage.height
+            ) * 0.9;
+
+            const x = centerX - (ponImage.width * scale) / 2;
+            const y = centerY - (ponImage.height * scale) / 2;
+
+            ctx.save();
+
+            // 呼吸スケール
+            ctx.translate(centerX, centerY);
+            ctx.scale(anim.breathScale, anim.breathScale);
+
+            // 頭の傾き
+            ctx.rotate(anim.headTilt * 0.01);
+
+            // 透明度
+            ctx.globalAlpha = anim.opacity;
+
+            ctx.translate(-centerX, -centerY);
+
+            // 画像描画
+            ctx.drawImage(ponImage, x, y, ponImage.width * scale, ponImage.height * scale);
+
+            ctx.restore();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (!isLoaded) return;
+
+            const now = Date.now();
+            frameCount++;
+
+            if (now - lastTime >= 1000) {
+                fpsDisplay.textContent = `FPS: ${frameCount}`;
+                frameCount = 0;
+                lastTime = now;
+            }
+
+            updateAnimation();
+            draw();
+        }
+
+        // グローバル関数（TTS 連携用）
+        window.updateLipSync = (value) => {
+            // リップシンク（後で実装）
+        };
+
+        // 初期化
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        loadImage();
+    </script>
+</body>
+</html>

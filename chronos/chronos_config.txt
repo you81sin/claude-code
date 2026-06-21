@@ -1,0 +1,2 @@
+SBV2_DIR=C:\VITS2
+LLM_PROVIDER=gemini

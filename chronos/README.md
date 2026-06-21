@@ -1,0 +1,96 @@
+# CHRONOS / pon — 個人で作るAI VTuber
+
+複数のLLMの上に「AI実体」を乗せ、視聴者とのやり取りで育てていく実験プロジェクト。
+現状は **pon（1体のAI VTuber）** に全集中している。
+
+- 思想（全体構想）: `CHRONOS_Complete_Unified_Spec.md`
+- フェーズ2の設計メモ: `DESIGN_PHASE2.md`
+
+> **最低ラインの目標**：「初音ミク的な存在（一貫した姿・声・発表できる）を、今のAIで個人が作れる」こと。
+> pon はすでに **喋る・性格がある・感情が揺れる・記憶する・自分から話し出す** ところまで出来ていて、
+> ミクより上（自律性）を狙っている部分すらある。詳しくは下の「ロードマップ」。
+
+---
+
+## まず動かす（最小構成）
+
+核は**外部ライブラリ無しでも起動する**設計。まずは「壊れていないこと」を確認するのがおすすめ。
+
+```bash
+# 1) 依存ゼロで核が動くか確認（APIキー不要・ネット不要）
+python tools/smoke_test.py        # → SMOKE TEST PASSED ✅ が出れば土台はOK
+
+# 2) 実際に pon と喋る（LLMキーが要る）
+cp .env.example .env              # .env を作って GEMINI_API_KEY を入れる
+pip install google-genai         # Gemini を使う場合（requirements.txt 参照）
+python main.py pon               # 起動。プロンプトに文字を打つと pon が返す
+```
+
+対話中のコマンド（一部）:
+- `/mode game|chat|marshmallow|comment|singing` … 配信モード切替
+- `/youtube <video_id>` … YouTube ライブチャットに接続
+- `/avatar regen` / `/avatar reset` … 見た目の再生成
+
+> 音声（喋り）を出すには別途 **Style-Bert-VITS2** サーバ（`http://127.0.0.1:5000`）が要る。
+> 無くても会話・ロジックは動く（音声だけスキップされる）。
+
+---
+
+## 全体構造（実装の地図）
+
+```
+main.py                  起動・キャラ選択(pon/mlm)・コマンド受付・アバター事前生成
+│
+├─ engine/
+│   ├─ state.py          感情/欲求/ストレスの状態空間（起動ごとに「今日の調子」が変わる）
+│   └─ worker.py         イベント処理ループ（コメント間引き・盛り上がり検知）
+│
+├─ runtime/silence.py    キュー + 自発トークループ + 沈黙検知（人間っぽい間の取り方）
+│
+├─ apps/pon/             ★ pon の本体
+│   ├─ app.py            1イベントの処理オーケストレーション
+│   ├─ policy.py         巨大プロンプト生成（IQ制限/天気/口癖/本気モード…）
+│   ├─ action.py         自律行動決定（respond / silent / 本気モード）
+│   ├─ emotion / desire / growth / episodes / silence / singing
+│
+├─ libs/persona/base.py  名前・性格・見た目・種族をLLMで自動生成
+│
+├─ memory/
+│   ├─ engine.py         永続記憶（self/chat 二層・減衰・※簡易ベクトル）
+│   └─ identity.py       キャラ同一性の永続化
+│
+├─ llm_io/llm.py         LLM切替ラッパー（Gemini / Anthropic）＋ Web検索
+│
+└─ drivers/              外部接続（音声/3D/YouTube/天気/VTube-OSC/画像）
+    └─ avatar/README.md  ← 現役パイプラインと実験の区別はここ
+```
+
+---
+
+## 現状と既知の弱点（正直版）
+
+| 状態 | 内容 |
+|---|---|
+| ✅ 強い | 感情・性格・自律会話・沈黙/自発・YouTube連携・本気モードは作り込み済み |
+| ⚠️ 弱点1 | **記憶が意味検索になっていない**（`memory/engine.py` の埋め込みが sha256 ハッシュ）。「似た記憶を引く」が効かない＝成長/記憶感の伸びしろ |
+| ⚠️ 弱点2 | **歌声がない**（TTSは喋り用）。「初音ミク」を名乗る核心がここ |
+| ⚠️ 弱点3 | アバター生成が散らかり気味 → `drivers/avatar/README.md` で現役3本を明記して整理 |
+| ⚠️ 弱点4 | `mlm` / `doku` / `hisyo` は未実装（仕様書のみ） |
+| ⚠️ 弱点5 | 元々Windows1台に密結合 → 核の numpy 依存を外し、どこでも起動できるよう改善中 |
+
+---
+
+## ロードマップ（個人 → ミク最低ライン）
+
+1. **土台**（←いまここ）：どこでも起動・再現可能・実験整理・スモークテスト
+2. **記憶を本物に**：sha256埋め込み → 実埋め込み（似た記憶を引けるように）
+3. **歌える声**：喋りTTS → 歌声合成を追加（ミクの核心）
+4. **発表**：配信を安定運用（OBS/YouTube）
+5. （遠い未来）仕様書のフェーズ4〜5：孫・1人1AI・社会 ← 今は触らない
+
+---
+
+## 注意
+
+- `.env`（APIキー）は**絶対にコミットしない**（`.gitignore` 済み）。
+- `apps/*/data/` のキャラ生成物（identity / 記憶 / 感情）はローカル固有なので追跡しない。

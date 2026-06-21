@@ -1,0 +1,27 @@
+# === 秘密情報（絶対にコミットしない）===
+.env
+*.key
+
+# === 実行時に生成されるもの ===
+chronos.lock
+output_voice.wav
+*.wav
+
+# === キャラの生成データ（個人に紐付く・各環境で再生成される）===
+# identity.json / 記憶 / 感情 / 成長 などはローカル固有なので追跡しない。
+apps/*/data/*.json
+apps/*/data/*.png
+apps/*/data/*.glb
+apps/*/data/*.vrm
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# === OS ===
+.DS_Store
+Thumbs.db
