@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>pon お絵描き</title>
+<style>
+  html,body { margin:0; height:100%; background:#fdfdf8; overflow:hidden; }
+  #wrap { width:100vw; height:100vh; display:flex; align-items:center; justify-content:center; }
+  canvas { background:#fffdf5; box-shadow:0 2px 16px rgba(0,0,0,.08); }
+  #theme { position:fixed; left:16px; top:12px; font:600 20px/1.4 "Segoe UI",sans-serif;
+           color:#555; opacity:.85; }
+</style>
+</head>
+<body>
+  <div id="theme"></div>
+  <div id="wrap"><canvas id="c" width="900" height="900"></canvas></div>
+<script>
+// =====================================================================
+// pon の「線を一本ずつ・同じタッチ・手描き感」お絵描きビューア
+//   apps/pon/data/draw_strokes.json を監視し、更新されたら描き直す。
+//   OBS では「ブラウザソース」でこのHTMLを開く（ローカルファイルでもOK）。
+// =====================================================================
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+const themeEl = document.getElementById('theme');
+const JSON_URL = 'data/draw_strokes.json';
+
+let lastTs = 0;
+let anim = null;
+
+function clearPaper(){
+  ctx.fillStyle = '#fffdf5';
+  ctx.fillRect(0,0,cv.width,cv.height);
+}
+
+// 人間らしさ：点ごとに微小な手ブレ＋一定でない速度＋線の入り抜き
+function drawPayload(payload){
+  if (anim) cancelAnimationFrame(anim);
+  clearPaper();
+  themeEl.textContent = payload.theme ? '🖍 ' + payload.theme : '';
+
+  const pen = payload.pen || {};
+  const color  = pen.color  || '#2b2b2b';
+  const width  = pen.width  || 2.6;
+  const wobble = pen.wobble || 0.6;
+  const speed  = pen.speed  || 220;   // points/sec
+
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = color;
+
+  const W = cv.width, H = cv.height, PAD = 60;
+  const SX = x => PAD + x*(W-2*PAD);
+  const SY = y => PAD + y*(H-2*PAD);
+
+  const strokes = payload.strokes || [];
+  let si = 0, pi = 0;
+  let nextStrokePauseUntil = 0;
+  let last = performance.now();
+
+  function step(now){
+    const dt = Math.min(0.05, (now-last)/1000); last = now;
+    if (now < nextStrokePauseUntil){ anim = requestAnimationFrame(step); return; }
+    // この frame で進める点数（速度を少し揺らす＝人間らしさ）
+    let budget = Math.max(1, Math.round(speed*dt*(0.7+Math.random()*0.6)));
+
+    while(budget-- > 0){
+      if (si >= strokes.length) return;            // 完成
+      const s = strokes[si];
+      if (s.length < 2){ si++; pi=0; continue; }
+
+      if (pi === 0){
+        // 線の描き始め：少し細く入る
+        ctx.beginPath();
+        ctx.lineWidth = width*0.6;
+        const p = s[0];
+        ctx.moveTo(SX(p[0])+ (Math.random()-.5)*wobble, SY(p[1])+ (Math.random()-.5)*wobble);
+        pi = 1;
+      } else {
+        const p = s[pi];
+        ctx.lineWidth = width + (Math.random()-.5)*wobble*0.5;
+        ctx.lineTo(SX(p[0])+ (Math.random()-.5)*wobble, SY(p[1])+ (Math.random()-.5)*wobble);
+        ctx.stroke();
+        pi++;
+        if (pi >= s.length){
+          si++; pi = 0;
+          // 線と線の間で“ひと呼吸”（たまに長めに考える）
+          nextStrokePauseUntil = now + (60 + Math.random()*120) + (Math.random()<0.12 ? 400 : 0);
+          break;
+        }
+      }
+    }
+    anim = requestAnimationFrame(step);
+  }
+  anim = requestAnimationFrame(step);
+}
+
+async function poll(){
+  try{
+    const r = await fetch(JSON_URL + '?t=' + Date.now(), {cache:'no-store'});
+    if (r.ok){
+      const p = await r.json();
+      if (p.ts && p.ts !== lastTs){ lastTs = p.ts; drawPayload(p); }
+    }
+  }catch(e){ /* ファイルがまだ無い等は無視 */ }
+  setTimeout(poll, 1200);
+}
+clearPaper();
+poll();
+</script>
+</body>
+</html>

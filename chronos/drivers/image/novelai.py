@@ -21,17 +21,19 @@ from observation.logger import log
 # 1. Pollinations.ai（無料・キー不要）
 # =========================================================
 
-def _generate_pollinations(prompt: str, output_path: str) -> bool:
+def _generate_pollinations(prompt: str, output_path: str,
+                           seed: int = 42, width: int = 832, height: int = 1216) -> bool:
     """
     https://pollinations.ai  — 完全無料、APIキー不要。
     GET リクエスト1本で PNG が返ってくる。
+    seed を固定すると毎回近い絵柄になる（タッチ統一に使う）。
     """
     log("[IMAGE] 画像生成開始（Pollinations.ai・無料）...")
 
     safe_prompt = urllib.parse.quote(prompt)
     url = (
         f"https://image.pollinations.ai/prompt/{safe_prompt}"
-        f"?width=832&height=1216&model=flux&seed=42&nologo=true"
+        f"?width={width}&height={height}&model=flux&seed={seed}&nologo=true"
     )
 
     try:
@@ -192,6 +194,14 @@ def generate_appearance(prompt: str, output_path: str) -> bool:
     return False
 
 
-# 汎用エイリアス（見た目に限らず、プロンプトから1枚作る用途）
-def generate_image(prompt: str, output_path: str) -> bool:
-    return generate_appearance(prompt, output_path)
+# 汎用：プロンプトから1枚作る（seed/サイズ指定可）。お絵描き等で使う。
+def generate_image(prompt: str, output_path: str,
+                   seed: int = 42, width: int = 1024, height: int = 1024) -> bool:
+    # 無料の Pollinations を seed/サイズ指定で優先、ダメなら他へフォールバック
+    if _generate_pollinations(prompt, output_path, seed=seed, width=width, height=height):
+        return True
+    for fn in (_generate_novelai, _generate_segmind):
+        if fn(prompt, output_path):
+            return True
+    log("[IMAGE] すべての画像生成サービスが失敗しました")
+    return False

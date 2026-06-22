@@ -45,11 +45,18 @@ def decide_theme(user_input: str = "") -> str:
     return random.choice(_DEFAULT_THEMES)
 
 
+# タッチを固定するための seed（毎回同じ画風に寄せる）
+STYLE_SEED = 7777
+
 def _build_image_prompt(theme: str) -> str:
-    """ポンコツらしい『下手かわいいクレヨン落書き』風プロンプト。"""
+    """
+    人間が手で描いた“線画”に寄せたプロンプト。
+    AIっぽいツヤ・陰影を避け、白地に黒線だけ＝線分解しやすく、手描き感が出る。
+    """
     return (
-        f"child's crayon drawing of {theme}, simple cute doodle, messy wobbly lines, "
-        f"hand-drawn naive art, white paper background"
+        f"hand-drawn pencil line drawing of {theme}, simple single-line sketch, "
+        f"coloring book outline, black lines on white paper, no shading, no color, "
+        f"naive childlike doodle, minimal"
     )
 
 
@@ -86,7 +93,13 @@ def _draw_comment(theme: str, ok: bool) -> str:
 
 def draw(user_input: str = "", app_id: str = APP_ID) -> tuple:
     """
-    お題を決めて絵を生成し、感想（セリフ）を返す。
+    お題を決めて絵を生成し、「線を一本ずつ・同じタッチ」で描けるよう
+    ストロークに分解してビューア用 JSON を書き出す。感想（セリフ）を返す。
+
+    生成物:
+      apps/<app_id>/data/drawings/<時刻>.png   元画像（参照用）
+      apps/<app_id>/data/current_drawing.png    元画像の固定パス
+      apps/<app_id>/data/draw_strokes.json      ★線データ（draw_viewer.html が1本ずつ描く）
 
     戻り値: (ok: bool, image_path: str|None, theme: str, comment: str)
     """
@@ -95,20 +108,36 @@ def draw(user_input: str = "", app_id: str = APP_ID) -> tuple:
     os.makedirs(data_dir, exist_ok=True)
     path    = os.path.join(data_dir, time.strftime("%Y%m%d_%H%M%S") + ".png")
     current = os.path.join("apps", app_id, "data", "current_drawing.png")
+    strokes_path = os.path.join("apps", app_id, "data", "draw_strokes.json")
 
-    log(f"[DRAW] お題『{theme}』を描く...")
+    log(f"[DRAW] お題『{theme}』を線画で描く...")
     ok = False
     try:
         from drivers.image.novelai import generate_image
-        ok = generate_image(_build_image_prompt(theme), path)
+        # seed 固定でタッチを寄せる・正方形・線画プロンプト
+        ok = generate_image(_build_image_prompt(theme), path, seed=STYLE_SEED,
+                            width=768, height=768)
     except Exception as e:
         log(f"[DRAW] 画像生成エラー: {e}")
 
     if ok:
         try:
-            shutil.copyfile(path, current)  # OBS等が見る固定パス
-            log(f"[DRAW] 完成 → {path}（表示用: {current}）")
+            shutil.copyfile(path, current)
         except Exception as e:
             log(f"[DRAW] current_drawing 更新失敗: {e}")
+
+        # 画像 → 線（ストローク）に分解 → 手描き化 → ビューア用に保存
+        try:
+            from libs.sketch import image_to_strokes, humanize, build_payload, save_payload
+            strokes = image_to_strokes(path)
+            if strokes:
+                strokes = humanize(strokes, jitter=0.004, seed=STYLE_SEED)
+                payload = build_payload(strokes, theme=theme)
+                save_payload(payload, strokes_path)
+                log(f"[DRAW] 線分解 完了: {len(strokes)}本 → {strokes_path}（1本ずつ描画）")
+            else:
+                log("[DRAW] 線分解できず（Pillow未導入など）→ 元画像表示のみ")
+        except Exception as e:
+            log(f"[DRAW] 線分解エラー: {e}")
 
     return ok, (path if ok else None), theme, _draw_comment(theme, ok)
