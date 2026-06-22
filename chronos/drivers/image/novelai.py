@@ -190,3 +190,8 @@ def generate_appearance(prompt: str, output_path: str) -> bool:
             return True
     log("[IMAGE] すべての画像生成サービスが失敗しました")
     return False
+
+
+# 汎用エイリアス（見た目に限らず、プロンプトから1枚作る用途）
+def generate_image(prompt: str, output_path: str) -> bool:
+    return generate_appearance(prompt, output_path)

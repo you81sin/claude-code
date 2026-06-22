@@ -291,6 +291,7 @@ def main():
     print(f"\n[CHRONOS] {channel} で起動します")
     print("mode: /mode game|marshmallow|chat|comment|singing")
     print("singing: /live | /humming | /sing <曲名> | /songs")
+    print("drawing: /draw [お題]（お題省略でponが決める）")
     print("avatar: /avatar regen (画像再生成) | /avatar reset (キャラごとリセット)")
 
     if channel == "pon":
@@ -409,6 +410,24 @@ def main():
                 update_state({"streaming_mode": "singing"})
                 if not sing(parts[1].strip(), app_id=channel):
                     print("[SING] 歌えなかった（曲名 or 歌声エンジン設定を確認）")
+            continue
+
+        # お絵描き: /draw [お題]（お題省略で pon が勝手に決める）
+        if raw.startswith("/draw"):
+            from apps.pon.drawing import draw
+            from memory.identity import load_identity
+            from runtime.silence import push_event
+            import re as _re
+            theme_arg = raw[len("/draw"):].strip()
+            ok, img, theme, comment = draw(theme_arg, app_id=channel)
+            print(f"[DRAW] お題『{theme}』 → {'完成: ' + img if ok else '生成失敗（ネット/APIを確認）'}")
+            ident = load_identity(channel) or {}
+            name  = _re.sub(r'[（(][^）)]*[）)]', '', ident.get("name", "pon")).strip() or "pon"
+            push_event({
+                "type": "action",
+                "payload": {"voice": f"{name}：{comment}", "motion": "none", "voice_type": name},
+                "channel": channel,
+            }, channel)
             continue
 
         if raw == "/avatar regen":
