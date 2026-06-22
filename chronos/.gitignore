@@ -5,7 +5,9 @@
 # === 実行時に生成されるもの ===
 chronos.lock
 output_voice.wav
+output_song.wav
 *.wav
+apps/*/songs/.work/        # 歌声エンジンの中間ファイル(MusicXML等)
 
 # === キャラの生成データ（個人に紐付く・各環境で再生成される）===
 # identity.json / 記憶 / 感情 / 成長 などはローカル固有なので追跡しない。

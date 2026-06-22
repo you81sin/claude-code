@@ -89,3 +89,35 @@ def set_live_mode():
 def set_humming_mode():
     update_state({"singing_phase": "humming"})
     log("[SINGING] 鼻歌モードに戻る")
+
+
+def sing(song_name: str, app_id: str = "pon") -> bool:
+    """
+    楽譜（apps/<app_id>/songs/<song_name>.json）を pon に歌わせる。
+
+    流れ: 楽譜を読む → 歌声エンジンで wav 生成 → 再生。
+    NEUTRINO が設定されていれば本物の歌声、無ければ喋り合成で繋ぐ。
+    成功で True。
+    """
+    from libs.song import load_song
+    from drivers.audio.singing_engine import synthesize_song
+    from drivers.audio.player import play_wav
+
+    try:
+        song = load_song(song_name, app_id)
+    except FileNotFoundError:
+        log(f"[SING] 曲が見つからない: {song_name}")
+        return False
+    except Exception as e:
+        log(f"[SING] 曲の読み込み失敗: {e}")
+        return False
+
+    out_path = "output_song.wav"
+    ok, engine = synthesize_song(song, out_path, app_id=app_id)
+    if not ok:
+        log(f"[SING] 歌声の生成に失敗（engine={engine}）")
+        return False
+
+    log(f"[SING] 『{song.title}』を歌う（{song.note_count}音 / engine={engine}）")
+    play_wav(out_path)
+    return True

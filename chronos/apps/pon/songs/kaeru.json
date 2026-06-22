@@ -1,0 +1,41 @@
+{
+  "title": "かえるのうた",
+  "_note": "パブリックドメイン（ドイツ民謡）。簡易アレンジ。歌の底の動作確認用サンプル。",
+  "tempo": 108,
+  "key": 0,
+  "beats_per_measure": 4,
+  "notes": [
+    {"lyric": "か", "pitch": "C4", "beats": 1},
+    {"lyric": "え", "pitch": "D4", "beats": 1},
+    {"lyric": "る", "pitch": "E4", "beats": 1},
+    {"lyric": "の", "pitch": "F4", "beats": 1},
+    {"lyric": "う", "pitch": "E4", "beats": 1},
+    {"lyric": "た", "pitch": "D4", "beats": 1},
+    {"lyric": "が", "pitch": "C4", "beats": 2},
+
+    {"lyric": "き", "pitch": "E4", "beats": 1},
+    {"lyric": "こ", "pitch": "F4", "beats": 1},
+    {"lyric": "え", "pitch": "G4", "beats": 1},
+    {"lyric": "て", "pitch": "A4", "beats": 1},
+    {"lyric": "く", "pitch": "G4", "beats": 1},
+    {"lyric": "る", "pitch": "F4", "beats": 1},
+    {"lyric": "よ", "pitch": "E4", "beats": 2},
+
+    {"lyric": "が", "pitch": "C4", "beats": 1},
+    {"lyric": "が", "pitch": "C4", "beats": 1},
+    {"lyric": "が", "pitch": "C4", "beats": 1},
+    {"lyric": "が", "pitch": "C4", "beats": 1},
+
+    {"lyric": "け", "pitch": "C4", "beats": 0.5},
+    {"lyric": "ろ", "pitch": "C4", "beats": 0.5},
+    {"lyric": "け", "pitch": "D4", "beats": 0.5},
+    {"lyric": "ろ", "pitch": "D4", "beats": 0.5},
+    {"lyric": "け", "pitch": "E4", "beats": 0.5},
+    {"lyric": "ろ", "pitch": "E4", "beats": 0.5},
+    {"lyric": "け", "pitch": "F4", "beats": 0.5},
+    {"lyric": "ろ", "pitch": "F4", "beats": 0.5},
+    {"lyric": "く", "pitch": "E4", "beats": 1},
+    {"lyric": "わ", "pitch": "D4", "beats": 1},
+    {"lyric": "あ", "pitch": "C4", "beats": 2}
+  ]
+}

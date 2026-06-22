@@ -125,3 +125,48 @@ def _play(text: str) -> None:
         log(f"[PLAYER ERROR] {e}")
     finally:
         _playing = False
+
+
+def play_wav(path: str) -> None:
+    """
+    既存の wav ファイルをそのまま再生する（歌＝事前に合成済みの音源用）。
+    play_voice はテキスト→TTS だが、こちらは出来上がった音源を流す。
+    """
+    if not os.path.exists(path):
+        log(f"[PLAYER] 音源が見つからない: {path}")
+        return
+    log(f"[PLAYER] 音源再生: {path}")
+    threading.Thread(target=_play_wav_file, args=(path,), daemon=True).start()
+
+
+def _play_wav_file(path: str) -> None:
+    global _playing
+    with _lock:
+        if _playing:
+            log("[PLAYER] 再生中のためスキップ")
+            return
+        _playing = True
+    try:
+        try:
+            import sounddevice as sd
+            import soundfile as sf
+
+            data, samplerate = sf.read(path, dtype="float32")
+            if len(data.shape) == 1:
+                data = data.reshape(-1, 1)
+            sd.play(data, samplerate)
+            sd.wait()
+        except Exception as e_sd:
+            log(f"[PLAYER] sounddevice失敗、フォールバック: {e_sd}")
+            import subprocess
+            if os.name == "nt":
+                subprocess.call(
+                    ["powershell", "-c", f"(New-Object Media.SoundPlayer '{path}').PlaySync()"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+            else:
+                subprocess.call(["aplay", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception as e:
+        log(f"[PLAYER ERROR] {e}")
+    finally:
+        _playing = False

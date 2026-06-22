@@ -290,7 +290,7 @@ def main():
 
     print(f"\n[CHRONOS] {channel} で起動します")
     print("mode: /mode game|marshmallow|chat|comment|singing")
-    print("singing: /live | /humming")
+    print("singing: /live | /humming | /sing <曲名> | /songs")
     print("avatar: /avatar regen (画像再生成) | /avatar reset (キャラごとリセット)")
 
     if channel == "pon":
@@ -390,6 +390,25 @@ def main():
             from apps.pon.singing import set_humming_mode
             set_humming_mode()
             update_state({"streaming_mode": "singing"})
+            continue
+
+        # 楽譜を歌わせる: /sing <曲名>  /  登録曲一覧: /songs
+        if raw == "/songs":
+            from libs.song import list_songs
+            songs = list_songs(channel)
+            print("[SING] 登録曲:", ", ".join(songs) if songs else "(なし)")
+            continue
+        if raw.startswith("/sing"):
+            from libs.song import list_songs
+            parts = raw.split(maxsplit=1)
+            if len(parts) < 2:
+                print("[SING] 使い方: /sing <曲名>")
+                print("[SING] 登録曲:", ", ".join(list_songs(channel)) or "(なし)")
+            else:
+                from apps.pon.singing import sing
+                update_state({"streaming_mode": "singing"})
+                if not sing(parts[1].strip(), app_id=channel):
+                    print("[SING] 歌えなかった（曲名 or 歌声エンジン設定を確認）")
             continue
 
         if raw == "/avatar regen":
