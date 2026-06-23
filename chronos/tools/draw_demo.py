@@ -139,7 +139,7 @@ def main():
 
     bm = make_cat_bitmap(120)
     strokes = bitmap_to_strokes(bm, min_len=3)
-    strokes = humanize(strokes, jitter=0.004, seed=7777)
+    strokes = humanize(strokes, jitter=0.0015, seed=7777)
     payload = build_payload(strokes, theme="ねこ（デモ）")
 
     pts = sum(len(s) for s in strokes)

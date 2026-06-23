@@ -131,7 +131,7 @@ def draw(user_input: str = "", app_id: str = APP_ID) -> tuple:
             from libs.sketch import image_to_strokes, humanize, build_payload, save_payload
             strokes = image_to_strokes(path)
             if strokes:
-                strokes = humanize(strokes, jitter=0.004, seed=STYLE_SEED)
+                strokes = humanize(strokes, jitter=0.0015, seed=STYLE_SEED)
                 payload = build_payload(strokes, theme=theme)
                 save_payload(payload, strokes_path)
                 log(f"[DRAW] 線分解 完了: {len(strokes)}本 → {strokes_path}（1本ずつ描画）")

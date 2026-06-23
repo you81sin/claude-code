@@ -43,14 +43,43 @@ def _simplify(path: list, step: float = 2.0) -> list:
     return out
 
 
+def _trace_from(start, ink, visited, prev_dir=None):
+    """1方向に貪欲になぞる。進行方向に近い未訪問の隣を選ぶ。"""
+    path = [start]
+    visited.add(start)
+    cur = start
+    while True:
+        best, best_score = None, -2.0
+        for dx, dy in _NEIGHBORS:
+            c = (cur[0] + dx, cur[1] + dy)
+            if c not in ink or c in visited:
+                continue
+            if prev_dir is None:
+                best = c
+                break
+            norm = (dx * dx + dy * dy) ** 0.5
+            score = (dx / norm) * prev_dir[0] + (dy / norm) * prev_dir[1]
+            if score > best_score:
+                best, best_score = c, score
+        if best is None:
+            return path
+        ndx, ndy = best[0] - cur[0], best[1] - cur[1]
+        nlen = (ndx * ndx + ndy * ndy) ** 0.5
+        prev_dir = (ndx / nlen, ndy / nlen)
+        visited.add(best)
+        path.append(best)
+        cur = best
+
+
 def bitmap_to_strokes(bitmap, min_len: int = 3, simplify_step: float = 2.0) -> list:
     """
     2値ビットマップ（2次元リスト, 1=線, 0=余白）を、連続した線（ストローク）に分解。
 
     返り値: ストロークのリスト。各ストローク = [[x,y], ...]（x,y は 0〜1 正規化）。
     - 人が描く順に近づけるため、開始点は左上→右下の読み順で選ぶ。
-    - なぞる時は「直前の進行方向に一番近い隣」を優先＝ジグザグ/逆走を防いで線を追う。
-    - 仕上げに近すぎる点を間引いて滑らかにする。
+    - 1本のストロークは「両方向にたどって結合」＝閉曲線(円)が1本に繋がる。
+    - 進行方向を保ってなぞり、ジグザグ/逆走を防ぐ。
+    - 仕上げに点を間引いて滑らかに。
     """
     h = len(bitmap)
     w = len(bitmap[0]) if h else 0
@@ -61,39 +90,25 @@ def bitmap_to_strokes(bitmap, min_len: int = 3, simplify_step: float = 2.0) -> l
     visited = set()
     strokes = []
 
-    def _best_neighbor(cur, prev_dir):
-        """進行方向 prev_dir に最も近い未訪問の隣を返す（無ければ None）。"""
-        best, best_score = None, -2.0
-        for dx, dy in _NEIGHBORS:
-            c = (cur[0] + dx, cur[1] + dy)
-            if c not in ink or c in visited:
-                continue
-            if prev_dir is None:
-                return c  # 描き始めは最初に見つかった隣
-            # 方向の内積（大きいほど直進）。斜めは正規化して比較。
-            norm = (dx * dx + dy * dy) ** 0.5
-            score = (dx / norm) * prev_dir[0] + (dy / norm) * prev_dir[1]
-            if score > best_score:
-                best, best_score = c, score
-        return best
-
-    # 読み順（上→下, 左→右）で描き出し＝人間の手順に近い
+    # 読み順で開始点を選ぶ＝人間の描き出しに近い
     for start in sorted(ink, key=lambda p: (p[1], p[0])):
         if start in visited:
             continue
-        path = [start]
-        visited.add(start)
-        cur, prev_dir = start, None
-        while True:
-            nxt = _best_neighbor(cur, prev_dir)
-            if nxt is None:
-                break
-            ndx, ndy = nxt[0] - cur[0], nxt[1] - cur[1]
-            nlen = (ndx * ndx + ndy * ndy) ** 0.5
-            prev_dir = (ndx / nlen, ndy / nlen)
-            visited.add(nxt)
-            path.append(nxt)
-            cur = nxt
+        # 1) 右(or 下)方向に伸ばす
+        forward = _trace_from(start, ink, visited)
+        # 2) 反対方向にも伸ばす（始点から左/上に向かって）
+        if len(forward) >= 2:
+            sx, sy = start
+            n1x, n1y = forward[1]
+            back_dir = (sx - n1x, sy - n1y)
+            blen = (back_dir[0] ** 2 + back_dir[1] ** 2) ** 0.5 or 1.0
+            back_dir = (back_dir[0] / blen, back_dir[1] / blen)
+            # start は forward の先頭なので visited 済み。後ろ向きに進める。
+            backward = _trace_from(start, ink, visited, prev_dir=back_dir)
+            # backward の先頭は start で重複するので除き、反転して前に繋ぐ
+            path = list(reversed(backward[1:])) + forward
+        else:
+            path = forward
 
         if len(path) >= min_len:
             path = _simplify(path, step=simplify_step)
@@ -170,8 +185,8 @@ def image_to_strokes(path: str, max_dim: int = 140, threshold: int = 128) -> lis
 # pon の固定ペン（毎回同じタッチにするための基準）
 DEFAULT_PEN = {
     "color": "#2b2b2b",   # 鉛筆っぽい濃いグレー
-    "width": 2.6,         # 線の太さ（一定）
-    "wobble": 0.6,        # 描画時の手ブレ量(px相当)
+    "width": 2.0,         # 線の太さ（一定・細めに調整）
+    "wobble": 0.25,       # 描画時の手ブレ量(px相当・グニャグニャを抑える)
     "speed": 220,         # 1秒あたりに進む点の数（描く速さ）
 }
 
