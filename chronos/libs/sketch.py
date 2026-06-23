@@ -26,16 +26,31 @@ from observation.logger import log
 # 中核: ビットマップ → ストローク（純Python・依存ゼロ）
 # =========================================================
 
-# 8近傍（直進を優先するため上下左右を先に）
+# 8近傍
 _NEIGHBORS = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)]
 
 
-def bitmap_to_strokes(bitmap, min_len: int = 3) -> list:
+def _simplify(path: list, step: float = 2.0) -> list:
+    """近すぎる点を間引いて線を滑らかにする（手描きのガタつき・細切れを減らす）。"""
+    if len(path) <= 2:
+        return path
+    out = [path[0]]
+    for p in path[1:-1]:
+        lx, ly = out[-1]
+        if (p[0] - lx) ** 2 + (p[1] - ly) ** 2 >= step * step:
+            out.append(p)
+    out.append(path[-1])
+    return out
+
+
+def bitmap_to_strokes(bitmap, min_len: int = 3, simplify_step: float = 2.0) -> list:
     """
     2値ビットマップ（2次元リスト, 1=線, 0=余白）を、連続した線（ストローク）に分解。
 
     返り値: ストロークのリスト。各ストローク = [[x,y], ...]（x,y は 0〜1 正規化）。
-    人が描く順に近づけるため、開始点は左上→右下の読み順で選ぶ。
+    - 人が描く順に近づけるため、開始点は左上→右下の読み順で選ぶ。
+    - なぞる時は「直前の進行方向に一番近い隣」を優先＝ジグザグ/逆走を防いで線を追う。
+    - 仕上げに近すぎる点を間引いて滑らかにする。
     """
     h = len(bitmap)
     w = len(bitmap[0]) if h else 0
@@ -46,28 +61,42 @@ def bitmap_to_strokes(bitmap, min_len: int = 3) -> list:
     visited = set()
     strokes = []
 
-    # 読み順（上→下, 左→右）で開始点を選ぶ＝人間の描き出しに近い
+    def _best_neighbor(cur, prev_dir):
+        """進行方向 prev_dir に最も近い未訪問の隣を返す（無ければ None）。"""
+        best, best_score = None, -2.0
+        for dx, dy in _NEIGHBORS:
+            c = (cur[0] + dx, cur[1] + dy)
+            if c not in ink or c in visited:
+                continue
+            if prev_dir is None:
+                return c  # 描き始めは最初に見つかった隣
+            # 方向の内積（大きいほど直進）。斜めは正規化して比較。
+            norm = (dx * dx + dy * dy) ** 0.5
+            score = (dx / norm) * prev_dir[0] + (dy / norm) * prev_dir[1]
+            if score > best_score:
+                best, best_score = c, score
+        return best
+
+    # 読み順（上→下, 左→右）で描き出し＝人間の手順に近い
     for start in sorted(ink, key=lambda p: (p[1], p[0])):
         if start in visited:
             continue
         path = [start]
         visited.add(start)
-        cur = start
-        # 線をたどれるだけたどる（貪欲・8近傍）
+        cur, prev_dir = start, None
         while True:
-            nxt = None
-            for dx, dy in _NEIGHBORS:
-                c = (cur[0] + dx, cur[1] + dy)
-                if c in ink and c not in visited:
-                    nxt = c
-                    break
+            nxt = _best_neighbor(cur, prev_dir)
             if nxt is None:
                 break
+            ndx, ndy = nxt[0] - cur[0], nxt[1] - cur[1]
+            nlen = (ndx * ndx + ndy * ndy) ** 0.5
+            prev_dir = (ndx / nlen, ndy / nlen)
             visited.add(nxt)
             path.append(nxt)
             cur = nxt
 
         if len(path) >= min_len:
+            path = _simplify(path, step=simplify_step)
             denom_x = max(1, w - 1)
             denom_y = max(1, h - 1)
             strokes.append([[round(x / denom_x, 4), round(y / denom_y, 4)] for x, y in path])
